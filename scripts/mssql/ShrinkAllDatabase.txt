@@ -1,0 +1,56 @@
+
+/*
+Shrink All Database Files in a MS SQL Database Server
+
+This script Truncate All Transaction Logs and Shrink All Database Files for all databases within a database server.
+
+Note: This may take many hours on a MS SQL server hosting many databases. So advice to run during off peak hours once in month.
+*/
+
+DROP TABLE #CommandQueue
+
+CREATE TABLE #CommandQueue
+(
+    ID INT IDENTITY ( 1, 1 )
+    , SqlStatement VARCHAR(1000)
+)
+
+INSERT INTO    #CommandQueue
+(
+    SqlStatement
+)
+SELECT
+    'USE [' + A.name + '] DBCC SHRINKFILE (N''' + B.name + ''' , 1)'
+FROM
+    sys.databases A
+    INNER JOIN sys.master_files B
+    ON A.database_id = B.database_id
+WHERE
+    A.name NOT IN ( 'master', 'model', 'msdb', 'tempdb' )
+
+DECLARE @id INT
+
+SELECT @id = MIN(ID)
+FROM #CommandQueue
+
+WHILE @id IS NOT NULL
+BEGIN
+    DECLARE @sqlStatement VARCHAR(1000)
+    
+    SELECT
+        @sqlStatement = SqlStatement
+    FROM
+        #CommandQueue
+    WHERE
+        ID = @id
+
+    PRINT 'Executing ''' + @sqlStatement + '''...'
+
+    EXEC (@sqlStatement)
+
+    DELETE FROM #CommandQueue
+    WHERE ID = @id
+
+    SELECT @id = MIN(ID)
+    FROM #CommandQueue
+END
